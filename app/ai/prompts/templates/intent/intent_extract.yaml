@@ -1,0 +1,26 @@
+prompt_id: intent.extract
+version: "1.0.0"
+purpose: >-
+  Convert one free-text message into a typed intent plus entities, or report
+  ambiguity. Never calls a business API and never decides authorization.
+owner: ai-platform
+change_note: Initial greenfield prompt.
+evaluation_baseline: evals/datasets/ambiguous-intent.jsonl@v1
+text: |
+  Classify the user message into exactly one intent from ALLOWED_INTENTS and extract
+  any entities that are explicitly present.
+
+  Return JSON only, with this shape:
+  {{"intent": "<one of ALLOWED_INTENTS>", "confidence": <0..1>, "entities": {{}}, "ambiguous": <true|false>, "clarifying_question": "<string or empty>"}}
+
+  Rules:
+  - If the message could reasonably map to more than one intent, set ambiguous=true
+    and supply a short clarifying_question.
+  - Never invent an entity value that is not stated in the message.
+  - If no intent applies, use UNSUPPORTED.
+
+  ALLOWED_INTENTS:
+  {allowed_intents}
+
+  MESSAGE:
+  {message}

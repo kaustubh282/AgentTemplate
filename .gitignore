@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local configuration - never commit real values
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Runtime output
+var/
+*.log
+
+# Eval reports are regenerated; the accepted baseline IS tracked
+evals/reports/
+!evals/regression/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Eval framework caches
+.deepeval/
+.deepeval_telemetry.txt

@@ -1,0 +1,25 @@
+prompt_id: supervisor.route
+version: "1.0.0"
+purpose: >-
+  Escalation-only routing for language the deterministic router could not safely
+  classify. Chooses among approved capabilities; grants itself nothing.
+owner: ai-platform
+change_note: Initial greenfield prompt.
+evaluation_baseline: evals/datasets/ambiguous-intent.jsonl@v1
+text: |
+  Decide which single approved capability should handle the user message.
+
+  Return JSON only:
+  {{"capability": "<one of ALLOWED_CAPABILITIES>", "reason_category": "<short slug>", "needs_clarification": <true|false>, "clarifying_question": "<string or empty>"}}
+
+  Rules:
+  - Choose only from ALLOWED_CAPABILITIES. Any other value is rejected by the server.
+  - You do not execute anything and you do not grant permissions.
+  - If the request is outside the supported set, choose UNSUPPORTED.
+  - Never state an insurance fact here.
+
+  ALLOWED_CAPABILITIES:
+  {allowed_capabilities}
+
+  MESSAGE:
+  {message}

@@ -1,0 +1,144 @@
+# Prometheus alerting rules for the ProTec Insurance AI template (master prompt §21, §35.1, §58.13).
+#
+# Every rule below corresponds to a row in docs/operations/OBSERVABILITY.md §5 and refers only
+# to metric names exported by app/core/observability/metrics.py through
+# GET /api/v1/internal/metrics/prometheus. A unit test (tests/unit/test_observability_pack.py)
+# fails if a rule references a metric the application does not emit.
+#
+# Thresholds are starting points; re-baseline after the first accepted preprod run.
+groups:
+  - name: protec-ai-efficiency
+    rules:
+      - alert: ZeroModelCallRateFell
+        expr: |
+          sum(rate(protec_zero_model_call_requests_total[15m]))
+            / sum(rate(protec_requests_total[15m])) < 0.65
+        for: 15m
+        labels: {severity: high}
+        annotations:
+          summary: "Zero-model-call rate fell below baseline"
+          description: "A deterministic path has started calling a model. Baseline is 0.74; investigate the router (§2.3, §58.5)."
+      - alert: AgentHandoffsObserved
+        expr: sum(increase(protec_agent_handoffs_per_request_count[10m])) > 0 and sum(increase(protec_agent_handoffs_per_request_sum[10m])) > 0
+        for: 5m
+        labels: {severity: high}
+        annotations:
+          summary: "Agent handoffs above zero"
+          description: "An unjustified multi-agent path appeared (§5.6). Expected: 0."
+      - alert: MedianInputTokensGrew
+        expr: protec_model_input_tokens{quantile="0.5"} > 526
+        for: 30m
+        labels: {severity: high}
+        annotations:
+          summary: "Median input tokens more than 20% above baseline (438)"
+          description: "Token regression (§58.13). Check prompt, retrieval top_k and history window changes."
+      - alert: EstimatedTokensInProduction
+        expr: sum(rate(protec_model_tokens_estimated_total[30m])) > 0
+        for: 30m
+        labels: {severity: medium}
+        annotations:
+          summary: "Token counts are being estimated, not provider-reported"
+          description: "Cost figures are approximate while this fires (§58.12)."
+
+  - name: protec-answer-quality
+    rules:
+      - alert: AbstentionRateSpike
+        expr: sum(rate(protec_abstention_total[30m])) / sum(rate(protec_model_calls_total[30m])) > 0.40
+        for: 30m
+        labels: {severity: medium}
+        annotations:
+          summary: "Abstention rate more than 2x baseline"
+          description: "Knowledge gap or retrieval regression. Check corpus lifecycle and RAG_MIN_SCORE."
+      - alert: GroundingFailureSpike
+        expr: sum(rate(protec_grounding_failure_total[30m])) > 2 * sum(rate(protec_grounding_failure_total[6h] offset 1d))
+        for: 15m
+        labels: {severity: high}
+        annotations:
+          summary: "Grounding failures more than 2x baseline"
+          description: "Possible hallucination pressure; answers are being abstained centrally (§6.3)."
+      - alert: StaleDocumentHits
+        expr: sum(increase(protec_stale_document_hits_total[10m])) > 0
+        labels: {severity: high}
+        annotations:
+          summary: "A superseded or revoked document was retrieved"
+          description: "Lifecycle governance failure (§34). Re-index and check document status."
+
+  - name: protec-security
+    rules:
+      - alert: GuardrailBlocksSpike
+        expr: sum(rate(protec_guardrail_interventions_total[15m])) > 5 * sum(rate(protec_guardrail_interventions_total[6h] offset 1d))
+        for: 10m
+        labels: {severity: medium}
+        annotations:
+          summary: "Guardrail blocks more than 5x baseline"
+          description: "Possible attack in progress (§12). Correlate with auth failures and IP dimension."
+      - alert: AuthorizationDenialsSpike
+        expr: sum(rate(protec_authorization_denials_total[15m])) > 5 * sum(rate(protec_authorization_denials_total[6h] offset 1d))
+        for: 10m
+        labels: {severity: high}
+        annotations:
+          summary: "Authorization denials more than 5x baseline"
+          description: "Possible enumeration of policies or conversations (§13.2)."
+      - alert: RateLimitRejectsHigh
+        expr: sum(rate(protec_rate_limit_rejects_total[5m])) > 5
+        for: 10m
+        labels: {severity: medium}
+        annotations:
+          summary: "Sustained rate-limit rejects"
+          description: "Abuse or a misbehaving client (§31)."
+
+  - name: protec-dependencies
+    rules:
+      - alert: CircuitBreakerOpen
+        expr: sum(increase(protec_circuit_open_total[5m])) > 0
+        labels: {severity: high}
+        annotations:
+          summary: "A provider circuit breaker opened"
+          description: "Upstream degraded; readiness will report providers=down (§20)."
+      - alert: ProviderFailureRateHigh
+        expr: sum(rate(protec_provider_failures_total[10m])) / sum(rate(protec_provider_calls_total[10m])) > 0.05
+        for: 10m
+        labels: {severity: high}
+        annotations:
+          summary: "Provider failure rate above 5%"
+          description: "Integration degraded. No fabricated data is served; retry directives are returned."
+      - alert: ModelFallbackEngaged
+        expr: sum(increase(protec_fallback_total{kind="model"}[15m])) > 0
+        labels: {severity: medium}
+        annotations:
+          summary: "Model fallback engaged in production"
+          description: "Primary model provider unstable (§20). High-risk capabilities never fall back."
+
+  - name: protec-slo-and-cost
+    rules:
+      - alert: DeterministicLatencyAboveSlo
+        expr: max(protec_request_latency_ms{quantile="0.95", route=~"/api/v1/(actions|flows/start)"}) > 300
+        for: 10m
+        labels: {severity: medium}
+        annotations:
+          summary: "Deterministic action p95 above 300 ms"
+          description: "Application regression on the zero-model path (§18)."
+      - alert: FaqLatencyAboveSlo
+        expr: max(protec_model_latency_ms{quantile="0.95"}) > 3000
+        for: 10m
+        labels: {severity: medium}
+        annotations:
+          summary: "FAQ p95 above 3000 ms"
+          description: "Retrieval or model regression (§18)."
+      - alert: CostPer1000AboveCeiling
+        expr: 1000 * sum(rate(protec_model_estimated_cost_sum[1h])) / sum(rate(protec_requests_total[1h])) > 15
+        for: 30m
+        labels: {severity: high}
+        annotations:
+          summary: "Cost per 1000 requests above the configured ceiling"
+          description: "FinOps breach (§35.1). Ceiling mirrors MAX_COST_PER_1000_MIXED_REQUESTS."
+
+  - name: protec-integrity
+    rules:
+      - alert: AuditSinkFailure
+        expr: sum(increase(protec_request_errors_total{code="INTERNAL_ERROR"}[5m])) > 0 and on() sum(rate(protec_requests_total[5m])) > 0
+        for: 2m
+        labels: {severity: critical}
+        annotations:
+          summary: "Requests are failing with INTERNAL_ERROR - check the audit sink first"
+          description: "Audit is fail-closed: an unavailable sink errors every audited request (§20.1). Verify the chain with scripts/verify_audit_chain.py after recovery."

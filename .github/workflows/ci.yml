@@ -1,0 +1,122 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  gates:
+    name: quality and evaluation gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev,evals,otel]"
+
+      # --- static analysis -------------------------------------------------
+      - name: Lint
+        run: python -m ruff check .
+
+      - name: Format check
+        run: python -m ruff format --check .
+
+      - name: Type check
+        run: python -m mypy
+
+      # --- tests -----------------------------------------------------------
+      - name: Tests
+        run: python -m pytest -q
+
+      # --- evaluation gates (release blocking) -----------------------------
+      - name: Native deterministic evals
+        run: python -m evals.native.run
+
+      - name: Ragas RAG evaluation
+        run: python -m evals.ragas.runners.rag_eval
+
+      - name: DeepEval agent regression
+        run: python -m evals.deepeval.run
+
+      - name: Benchmark and regression comparison
+        run: python scripts/benchmark.py
+
+      - name: Load profiles
+        run: |
+          python scripts/load_test.py faq --requests 60
+          python scripts/load_test.py mixed --requests 60
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-reports
+          path: evals/reports/
+
+  supply-chain:
+    name: supply chain (dependency audit, licences, SBOM)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # The runtime closure is what ships in the image, so it is what gets audited.
+      - name: Install pinned runtime dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.lock
+          pip install --no-deps .
+
+      - name: Lock file matches pyproject
+        run: |
+          pip install pip-audit
+          # Every core dependency must resolve to a pin in the lock; a drift here means
+          # the lock was not regenerated after a pyproject change.
+          python - <<'EOF'
+          import tomllib, sys
+          from packaging.requirements import Requirement
+          from packaging.utils import canonicalize_name
+          project = tomllib.load(open("pyproject.toml", "rb"))["project"]
+          pins = {canonicalize_name(l.split("==")[0]) for l in open("requirements.lock") if "==" in l}
+          missing = [r for r in project["dependencies"] if canonicalize_name(Requirement(r).name) not in pins]
+          if missing:
+              sys.exit(f"requirements.lock is missing core dependencies: {missing}")
+          print(f"lock covers all {len(project['dependencies'])} core dependencies ({len(pins)} pins)")
+          EOF
+
+      - name: Dependency vulnerability audit (release blocking)
+        continue-on-error: false
+        run: pip-audit -r requirements.lock --strict --desc on
+
+      - name: Licence inventory
+        run: |
+          pip install pip-licenses
+          pip-licenses --format=markdown --with-urls --output-file=licenses.md
+          pip-licenses --format=json --output-file=licenses.json
+
+      - name: SBOM (CycloneDX)
+        run: |
+          pip install cyclonedx-bom
+          cyclonedx-py environment -o sbom.json
+
+      - name: Upload supply-chain evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supply-chain
+          path: |
+            licenses.md
+            licenses.json
+            sbom.json
+            requirements.lock

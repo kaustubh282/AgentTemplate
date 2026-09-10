@@ -1,0 +1,67 @@
+# Pinned runtime dependency closure for the container image and CI supply-chain job.
+# Contents: the resolved closure of [project.dependencies] plus the `otel` extra, exact pins.
+# Regenerate after changing pyproject dependencies, in a clean virtualenv:
+#   pip install ".[otel]" && pip freeze --exclude-editable > requirements.lock
+# Dev and eval extras are deliberately excluded: they never enter the runtime image.
+annotated-doc==0.0.5
+annotated-types==0.7.0
+anyio==4.14.2
+attrs==26.1.0
+boto3==1.43.62
+botocore==1.43.62
+certifi==2026.7.22
+cffi==2.1.0
+charset-normalizer==3.4.9
+click==8.3.3
+colorama==0.4.6
+cryptography==50.0.1
+docstring_parser==0.18.0
+fastapi==0.141.1
+googleapis-common-protos==1.75.3
+h11==0.16.0
+httpcore==1.0.9
+httptools==0.8.0
+httpx-sse==0.4.3
+httpx==0.28.1
+idna==3.18
+jmespath==1.1.0
+jsonschema-specifications==2025.9.1
+jsonschema==4.26.0
+mcp==1.30.0
+opentelemetry-api==1.44.0
+opentelemetry-exporter-otlp-proto-common==1.44.0
+opentelemetry-exporter-otlp-proto-http==1.44.0
+opentelemetry-instrumentation-threading==0.65b0
+opentelemetry-instrumentation==0.65b0
+opentelemetry-proto==1.44.0
+opentelemetry-sdk==1.44.0
+opentelemetry-semantic-conventions==0.65b0
+packaging==25.0
+protobuf==7.36.1
+pycparser==3.0
+pydantic-settings==2.14.2
+pydantic==2.13.5
+pydantic_core==2.46.5
+PyJWT==2.13.0
+python-dateutil==2.9.0.post0
+python-dotenv==1.2.2
+python-multipart==0.0.32
+pywin32==312
+PyYAML==6.0.3
+redis==8.1.0
+referencing==0.37.0
+requests==2.34.2
+rpds-py==2026.6.3
+s3transfer==0.19.2
+six==1.17.0
+sse-starlette==3.4.11
+starlette==1.6.0
+strands-agents==1.54.0
+typing-inspection==0.4.2
+typing_extensions==4.16.0
+urllib3==2.7.0
+uvicorn==0.52.4
+watchdog==6.0.0
+watchfiles==1.2.0
+websockets==15.0.1
+wrapt==2.4.0
