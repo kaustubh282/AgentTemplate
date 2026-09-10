@@ -40,6 +40,9 @@ dev = [
 evals = [
     "ragas>=0.2",
     "deepeval>=1.0",
+    "rapidfuzz>=3.0",
+    "rouge-score>=0.1.2",
+    "sacrebleu>=2.0",
 ]
 
 [tool.setuptools.packages.find]
